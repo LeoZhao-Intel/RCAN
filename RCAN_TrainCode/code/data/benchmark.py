@@ -4,7 +4,8 @@ from data import common
 from data import srdata
 
 import numpy as np
-import scipy.misc as misc
+#import scipy.misc as misc
+import imageio
 
 import torch
 import torch.utils.data as data

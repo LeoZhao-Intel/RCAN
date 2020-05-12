@@ -55,6 +55,24 @@ class ResBlock(nn.Module):
 
         return res
 
+class PixelShuffle2(nn.Module):
+    def __init__(self, scale, n_feat):
+        super(PixelShuffle2, self).__init__()
+        self.scale = scale
+        self.n_feat = n_feat
+
+    def forward(self, x):
+        m = []
+        for i in range(x.shape[0]):
+            y = x[i].reshape(self.scale, self.scale, self.n_feat, x.shape[2], x.shape[3]).permute(3, 0, 4, 1, 2)
+            m.append(y.reshape(1, self.scale*x.shape[2], self.scale*x.shape[3], self.n_feat).permute(0, 3, 1, 2))
+        return torch.cat(m)
+'''
+        #fixed shape for 224x224, uncomment it to export fixed shape onnx
+        y = x.reshape(self.scale, self.scale, self.n_feat, 224, 224).permute(3, 0, 4, 1, 2)
+        return y.reshape(1, 448, 448, self.n_feat).permute(0, 3, 1, 2)
+'''
+
 class Upsampler(nn.Sequential):
     def __init__(self, conv, scale, n_feat, bn=False, act=False, bias=True):
 
@@ -62,7 +80,8 @@ class Upsampler(nn.Sequential):
         if (scale & (scale - 1)) == 0:    # Is scale = 2^n?
             for _ in range(int(math.log(scale, 2))):
                 m.append(conv(n_feat, 4 * n_feat, 3, bias))
-                m.append(nn.PixelShuffle(2))
+#                m.append(nn.PixelShuffle(2))
+                m.append(PixelShuffle2(2, n_feat))
                 if bn: m.append(nn.BatchNorm2d(n_feat))
                 if act: m.append(act())
         elif scale == 3:

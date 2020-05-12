@@ -78,7 +78,8 @@ class Trainer():
         self.ckp.write_log('\nEvaluation:')
         self.ckp.add_log(torch.zeros(1, len(self.scale)))
         self.model.eval()
-
+        self.ckp.save(self, epoch, is_best=True)
+        '''
         timer_test = utility.timer()
         with torch.no_grad():
             for idx_scale, scale in enumerate(self.scale):
@@ -124,6 +125,7 @@ class Trainer():
         )
         if not self.args.test_only:
             self.ckp.save(self, epoch, is_best=(best[1][0] + 1 == epoch))
+        '''
 
     def prepare(self, l, volatile=False):
         device = torch.device('cpu' if self.args.cpu else 'cuda')

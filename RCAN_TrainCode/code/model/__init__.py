@@ -4,6 +4,7 @@ from importlib import import_module
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.onnx as torch_onnx
 
 class Model(nn.Module):
     def __init__(self, args, ckp):
@@ -80,6 +81,9 @@ class Model(nn.Module):
                 target.state_dict(),
                 os.path.join(apath, 'model', 'model_{}.pt'.format(epoch))
             )
+        #save onnnx model with 224x224 input
+        dummy_input = torch.randn(1, 3, 224, 224, device='cuda')
+        torch_onnx.export(target, dummy_input, os.path.join(apath, 'model', 'model_best.onnx'))
 
     def load(self, apath, pre_train='.', resume=-1, cpu=False):
         if cpu:

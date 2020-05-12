@@ -3,7 +3,8 @@ import os
 from data import common
 
 import numpy as np
-import scipy.misc as misc
+#import scipy.misc as misc
+import imageio
 
 import torch
 import torch.utils.data as data
@@ -32,12 +33,13 @@ class SRData(data.Dataset):
             if args.ext.find('reset') >= 0:
                 print('Preparing seperated binary files')
                 for v in self.images_hr:
-                    hr = misc.imread(v)
+             #       hr = misc.imread(v)
+                    hr = imageio.imread(v)
                     name_sep = v.replace(self.ext, '.npy')
                     np.save(name_sep, hr)
                 for si, s in enumerate(self.scale):
                     for v in self.images_lr[si]:
-                        lr = misc.imread(v)
+                        lr = imageio.imread(v)
                         name_sep = v.replace(self.ext, '.npy')
                         np.save(name_sep, lr)
 
