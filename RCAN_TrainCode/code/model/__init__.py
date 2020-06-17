@@ -81,9 +81,11 @@ class Model(nn.Module):
                 target.state_dict(),
                 os.path.join(apath, 'model', 'model_{}.pt'.format(epoch))
             )
-        #save onnnx model with 224x224 input
-        dummy_input = torch.randn(1, 3, 224, 224, device='cuda')
-        torch_onnx.export(target, dummy_input, os.path.join(apath, 'model', 'model_best.onnx'))
+
+    def export_onnx(self, h, w, batch=1):
+        target = self.get_model()
+        dummy_input = torch.randn(batch, 3, h, w, device='cpu' if self.cpu else 'cuda')
+        torch_onnx.export(target, dummy_input, 'model_best_%d_%d.onnx' % (h, w), input_names = ['input'], output_names = ['output'])
 
     def load(self, apath, pre_train='.', resume=-1, cpu=False):
         if cpu:

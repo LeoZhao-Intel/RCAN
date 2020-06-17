@@ -10,6 +10,7 @@ class CALayer(nn.Module):
     def __init__(self, channel, reduction=16):
         super(CALayer, self).__init__()
         # global average pooling: feature --> point
+        self.avg_pool2 = nn.AdaptiveAvgPool2d((2, 2))
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         # feature channel downscale and upscale --> channel weight
         self.conv_du = nn.Sequential(
@@ -20,7 +21,8 @@ class CALayer(nn.Module):
         )
 
     def forward(self, x):
-        y = self.avg_pool(x)
+        y = self.avg_pool2(x)
+        y = self.avg_pool(y)
         y = self.conv_du(y)
         return x * y
 

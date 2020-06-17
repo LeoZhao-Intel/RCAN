@@ -78,8 +78,7 @@ class Trainer():
         self.ckp.write_log('\nEvaluation:')
         self.ckp.add_log(torch.zeros(1, len(self.scale)))
         self.model.eval()
-        self.ckp.save(self, epoch, is_best=True)
-        '''
+
         timer_test = utility.timer()
         with torch.no_grad():
             for idx_scale, scale in enumerate(self.scale):
@@ -121,11 +120,106 @@ class Trainer():
                 )
 
         self.ckp.write_log(
-            'Total time: {:.2f}s\n'.format(timer_test.toc()), refresh=True
+            'Total time: {:.2f}s, ave time: {:.2f}s\n'.format(timer_test.toc(), timer_test.toc()/len(self.loader_test)), refresh=True
         )
         if not self.args.test_only:
             self.ckp.save(self, epoch, is_best=(best[1][0] + 1 == epoch))
-        '''
+
+    def test_split(self, split_w, split_h):
+        epoch = self.scheduler.last_epoch + 1
+        self.ckp.write_log('\nSplit Evaluation:')
+        self.ckp.add_log(torch.zeros(1, len(self.scale)))
+        self.model.eval()
+
+        timer_test = utility.timer()
+        with torch.no_grad():
+            for idx_scale, scale in enumerate(self.scale):
+                eval_acc = 0
+                self.loader_test.dataset.set_scale(idx_scale)
+                tqdm_test = tqdm(self.loader_test, ncols=80)
+                for idx_img, (lr, hr, filename, _) in enumerate(tqdm_test):
+                    filename = filename[0]
+                    no_eval = (hr.nelement() == 1)
+                    if not no_eval:
+                        lr, hr = self.prepare([lr, hr])
+                    else:
+                        lr = self.prepare([lr])[0]
+
+#                    print('leo lr:{}, hr:{}, scale:{}\n'.format(lr.size(), hr.size(), scale))
+                    ih, iw = lr.shape[2:4]
+                    ih = ih // split_h
+                    iw = iw // split_w
+
+                    sr = torch.zeros(lr.shape[0], lr.shape[1], lr.shape[2] * scale, lr.shape[3] * scale)
+                    sr = self.prepare([sr])[0]
+
+#                    print('leo sr:{}\n'.format(sr.size()))
+                    for j in range(split_h):
+                        for i in range(split_w):
+                          # crop from lr input, crop block+1 pixels at the edge and center crop block+2 in the middle
+                            x = i * iw - 1 
+                            y = j * ih - 1
+                            w = iw + 2
+                            h = ih + 2
+                            if i == 0:
+                                x = 0
+                                w = w - 1
+                            if j == 0:
+                                y = 0
+                                h = h - 1
+                            if i == split_w - 1:
+                                w = w - 1
+                            if j == split_h - 1:
+                                h = h - 1
+
+#                            print('leo x:{} y:{} w:{} h:{}\n'.format(x, y, w, h))
+                            lr_s = lr[:, :, y:y+h, x:x+w]
+#                            print('leo lr_s:{}\n'.format(lr_s.size()))
+                            sr_s = self.model(lr_s, idx_scale)
+                            sr_s = utility.quantize(sr_s, self.args.rgb_range)
+
+                          # fill into sr output
+#                            print('leo sr_s:{}\n'.format(sr_s.size()))
+                            x = scale
+                            y = scale
+                            w = iw * scale
+                            h = ih * scale
+                            if i == 0:
+                                x = 0
+                            if j == 0:
+                                y = 0
+#                            print('leo sr: x:{} y:{} w:{} h:{}\n'.format(x, y, w, h))
+                            sr[:, :, j*h:(j+1)*h, i*w:(i+1)*w] = sr_s[:, :, y:y+h, x:x+w] 
+
+                    save_list = [sr]
+                    if not no_eval:
+                        eval_acc += utility.calc_psnr(
+                            sr, hr, scale, self.args.rgb_range,
+                            benchmark=self.loader_test.dataset.benchmark
+                        )
+                        save_list.extend([lr, hr])
+
+                    if self.args.save_results:
+                        self.ckp.save_results(filename, save_list, scale)
+
+                self.ckp.log[-1, idx_scale] = eval_acc / len(self.loader_test)
+                best = self.ckp.log.max(0)
+                self.ckp.write_log(
+                    '[{} x{}]\tPSNR: {:.3f} (Best: {:.3f} @epoch {})'.format(
+                        self.args.data_test,
+                        scale,
+                        self.ckp.log[-1, idx_scale],
+                        best[0][idx_scale],
+                        best[1][idx_scale] + 1
+                    )
+                )
+
+        self.ckp.write_log(
+            'Total time: {:.2f}s, ave time: {:.2f}s\n'.format(timer_test.toc(), timer_test.toc()/len(self.loader_test)), refresh=True
+        )
+        if not self.args.test_only:
+            self.ckp.save(self, epoch, is_best=(best[1][0] + 1 == epoch))
+
 
     def prepare(self, l, volatile=False):
         device = torch.device('cpu' if self.args.cpu else 'cuda')
@@ -137,6 +231,7 @@ class Trainer():
 
     def terminate(self):
         if self.args.test_only:
+#            self.test_split(2,1)
             self.test()
             return True
         else:
